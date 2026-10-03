@@ -113,9 +113,9 @@
     }
     .status-pulse { animation: pulse-ring 2s infinite ease-in-out; }
 
-    /* Drawer Animation */
+    /* Drawer & Sidebar Transition */
     .drawer-slide-left {
-      transition: transform 0.3s ease-in-out;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
   </style>
 </head>
@@ -123,11 +123,11 @@
 
   <!-- HEADER / TOPBAR -->
   <header class="h-14 sm:h-16 bg-slate-950/95 border-b border-slate-800/80 flex items-center justify-between px-3 sm:px-4 z-30 shrink-0 backdrop-blur">
-    <!-- Brand Info & Mobile Toggle -->
+    <!-- Brand Info & Sidebar Toggle -->
     <div class="flex items-center space-x-2 sm:space-x-3">
-      <!-- Mobile Sidebar Toggle -->
-      <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 rounded-lg bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white" title="Buka Armada">
-        <i data-lucide="menu" class="w-5 h-5"></i>
+      <!-- Universal Sidebar Toggle Button -->
+      <button onclick="toggleSidebar()" id="sidebarToggleBtn" class="p-2 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800 transition shadow-sm flex items-center justify-center" title="Tampilkan / Sembunyikan Sidebar Armada">
+        <i data-lucide="panel-left-close" class="w-5 h-5 text-blue-400"></i>
       </button>
 
       <div class="p-1.5 sm:p-2 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400 shrink-0">
@@ -174,11 +174,22 @@
   <div class="flex flex-1 overflow-hidden relative">
     
     <!-- Mobile Sidebar Backdrop Overlay -->
-    <div id="sidebarBackdrop" onclick="toggleMobileSidebar(false)" class="hidden fixed inset-0 bg-slate-950/80 z-20 backdrop-blur-sm lg:hidden transition-opacity"></div>
+    <div id="sidebarBackdrop" onclick="toggleSidebar(false)" class="hidden fixed inset-0 bg-slate-950/80 z-20 backdrop-blur-sm lg:hidden transition-opacity"></div>
 
     <!-- SIDEBAR FLEET PANEL -->
-    <aside id="sidebar" class="fixed lg:relative inset-y-0 left-0 w-80 sm:w-88 bg-slate-950/95 border-r border-slate-800/80 flex flex-col z-30 transform -translate-x-full lg:translate-x-0 drawer-slide-left backdrop-blur shrink-0">
+    <aside id="sidebar" class="fixed lg:relative inset-y-0 left-0 w-80 sm:w-88 bg-slate-950/95 border-r border-slate-800/80 flex flex-col z-30 drawer-slide-left backdrop-blur shrink-0 transition-all duration-300">
       
+      <!-- Sidebar Header Bar -->
+      <div class="px-3.5 py-2.5 border-b border-slate-800/80 bg-slate-900/80 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="layers" class="w-4 h-4 text-blue-400"></i>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-200">Armada & AIS Feed</span>
+        </div>
+        <button onclick="toggleSidebar(false)" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Sembunyikan Sidebar">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
       <!-- Area Selector Bounding Box -->
       <div class="p-3 border-b border-slate-800/80 bg-slate-900/50 space-y-2">
         <div class="flex items-center justify-between">
@@ -241,8 +252,14 @@
       <!-- Leaflet Map Container -->
       <div id="map"></div>
 
+      <!-- FLOATING EXPAND SIDEBAR BUTTON (VISIBLE WHEN SIDEBAR IS COLLAPSED) -->
+      <button id="floatingExpandSidebarBtn" onclick="toggleSidebar(true)" class="hidden absolute top-3 left-3 z-[1000] bg-slate-950/90 hover:bg-slate-900 border border-slate-700/80 text-blue-400 p-2 sm:px-3 sm:py-2 rounded-xl shadow-2xl backdrop-blur flex items-center space-x-2 transition hover:scale-105">
+        <i data-lucide="panel-left-open" class="w-5 h-5"></i>
+        <span class="text-xs font-semibold text-slate-200 hidden sm:inline">Buka Armada</span>
+      </button>
+
       <!-- FLOATING LIVE ACTIVITY TICKER BANNER (TOP LEFT MAP) -->
-      <div class="absolute top-3 left-3 right-3 sm:right-auto z-[1000] pointer-events-none">
+      <div class="absolute top-3 left-12 sm:left-38 z-[1000] pointer-events-none transition-all duration-300" id="tickerContainer">
         <div id="liveFeedTicker" class="bg-slate-950/90 border border-slate-800/90 text-slate-200 text-xs px-3 py-1.5 rounded-xl shadow-2xl backdrop-blur flex items-center space-x-2 max-w-md pointer-events-auto transition-all">
           <span class="w-2 h-2 rounded-full bg-emerald-400 status-pulse shrink-0"></span>
           <span class="text-[11px] font-mono truncate" id="tickerText">Sistem AIS & Marker Cluster aktif...</span>
@@ -1044,22 +1061,78 @@
       map.fitBounds(group.getBounds().pad(0.15));
     }
 
-    function toggleMobileSidebar(show) {
+    let isSidebarOpen = true;
+
+    function initSidebarState() {
+      // Automatic initial state: Open on desktop (>=1024px), closed on mobile
+      isSidebarOpen = window.innerWidth >= 1024;
+      applySidebarState();
+    }
+
+    function toggleSidebar(forceState) {
+      if (typeof forceState === 'boolean') {
+        isSidebarOpen = forceState;
+      } else {
+        isSidebarOpen = !isSidebarOpen;
+      }
+      applySidebarState();
+    }
+
+    function applySidebarState() {
       const sidebar = document.getElementById('sidebar');
       const backdrop = document.getElementById('sidebarBackdrop');
+      const toggleBtn = document.getElementById('sidebarToggleBtn');
+      const floatingBtn = document.getElementById('floatingExpandSidebarBtn');
+      const tickerContainer = document.getElementById('tickerContainer');
 
-      const isHidden = sidebar.classList.contains('-translate-x-full');
-      const shouldShow = show !== undefined ? show : isHidden;
+      if (isSidebarOpen) {
+        sidebar.classList.remove('-translate-x-full', 'lg:-ml-80', 'sm:-ml-88');
+        sidebar.classList.add('translate-x-0', 'lg:ml-0');
+        
+        if (window.innerWidth < 1024) {
+          backdrop.classList.remove('hidden');
+        } else {
+          backdrop.classList.add('hidden');
+        }
 
-      if (shouldShow) {
-        sidebar.classList.remove('-translate-x-full');
-        backdrop.classList.remove('hidden');
+        if (toggleBtn) {
+          toggleBtn.innerHTML = `<i data-lucide="panel-left-close" class="w-5 h-5 text-blue-400"></i>`;
+          toggleBtn.title = "Sembunyikan Sidebar Armada";
+        }
+        if (floatingBtn) {
+          floatingBtn.classList.add('hidden');
+        }
+        if (tickerContainer) {
+          tickerContainer.style.left = '0.75rem';
+        }
       } else {
-        sidebar.classList.add('-translate-x-full');
+        sidebar.classList.add('-translate-x-full', 'lg:-ml-80', 'sm:-ml-88');
+        sidebar.classList.remove('translate-x-0', 'lg:ml-0');
         backdrop.classList.add('hidden');
+
+        if (toggleBtn) {
+          toggleBtn.innerHTML = `<i data-lucide="panel-left" class="w-5 h-5 text-slate-400"></i>`;
+          toggleBtn.title = "Tampilkan Sidebar Armada";
+        }
+        if (floatingBtn) {
+          floatingBtn.classList.remove('hidden');
+        }
+        if (tickerContainer) {
+          tickerContainer.style.left = '3.5rem';
+        }
       }
 
-      setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+      if (window.lucide) lucide.createIcons();
+
+      // Trigger Leaflet map container recalculation seamlessly
+      setTimeout(() => { 
+        if (map) map.invalidateSize(); 
+      }, 310);
+    }
+
+    // Backward compatibility alias
+    function toggleMobileSidebar(show) {
+      toggleSidebar(show);
     }
 
     function filterVessels() {
@@ -1081,6 +1154,7 @@
 
     window.onload = () => {
       initMap();
+      initSidebarState();
       if (window.lucide) lucide.createIcons();
     };
   </script>
