@@ -21,7 +21,6 @@
 
   <style>
     #map { height: calc(100vh - 64px); }
-    .custom-ship-icon { transition: transform 0.3s ease; }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-hidden">
@@ -43,7 +42,7 @@
       <div class="relative w-full">
         <input type="text" id="searchInput" onkeyup="filterVessels()" 
           placeholder="Cari berdasarkan Nama, IMO, atau MMSI..." 
-          class="w-full bg-slate-800 text-sm border border-slate-700 rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-blue-500">
+          class="w-full bg-slate-800 text-sm border border-slate-700 rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-blue-500 text-white">
         <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
       </div>
     </div>
@@ -67,7 +66,6 @@
       </div>
       
       <div id="vesselList" class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
-        <!-- Live Item list dari JavaScript -->
         <div class="p-4 text-center text-slate-500 text-sm">Memuat data armada...</div>
       </div>
     </aside>
@@ -81,22 +79,21 @@
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
   <script>
-    // Ganti URL di bawah dengan URL Web App Apps Script Anda setelah di-Deploy!
+    // MASUKKAN URL WEB APP APPS SCRIPT ANDA DI SINI
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwVNTPdA8DlfCuh40ol65K-spcAw77hDyviM5sUhuSJQj_w6cttlb4oNQCj5Sy3MiYWfw/exec";
 
     let map;
     let vesselMarkers = {};
-    let geofenceCircles = [];
     let vesselsData = [];
 
-    // Inisialisasi Peta Leaflet (Tema Dark Ocean)
+    // Inisialisasi Peta Leaflet (Esri World Dark Gray Canvas - BEBAS WATERMARK)
     function initMap() {
       map = L.map('map').setView([-1.2653, 116.8312], 6); // Default Center Indonesia
       
-      // Tile Layer Dark Mode CartoDB
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        maxZoom: 18
+      // Tile Layer Esri World Dark Gray Canvas
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+        maxZoom: 16
       }).addTo(map);
 
       fetchDataFromBackend();
@@ -104,8 +101,9 @@
 
     // Ambil Data dari Backend GAS via REST API
     async function fetchDataFromBackend() {
-      if (GAS_WEB_APP_URL === "YOUR_GAS_WEB_APP_DEPLOYMENT_URL") {
+      if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes("YOUR_DEPLOYMENT_ID")) {
         console.warn("Harap masukkan URL Deployment Web App GAS Anda!");
+        return;
       }
 
       try {
@@ -202,15 +200,9 @@
       renderVesselList(filtered);
     }
 
-    // Load App
     window.onload = () => {
       initMap();
       lucide.createIcons();
-
-      // Register PWA Service Worker
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Registration Failed', err));
-      }
     };
   </script>
 </body>
