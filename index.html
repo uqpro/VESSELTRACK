@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vessel Track - Real-Time Maritime Monitoring</title>
+  
+  <!-- PWA Metadata -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0F172A">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    #map { height: calc(100vh - 64px); }
+    .custom-ship-icon { transition: transform 0.3s ease; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-hidden">
+
+  <!-- NAVBAR / HEADER -->
+  <header class="h-16 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-4 z-20 relative">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-blue-600 rounded-lg">
+        <i data-lucide="ship" class="w-6 h-6 text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-wide text-white">VESSEL TRACK</h1>
+        <p class="text-xs text-slate-400">Real-Time Maritime Fleet Monitoring</p>
+      </div>
+    </div>
+
+    <!-- PENCARIAN VESSEL -->
+    <div class="flex items-center space-x-3 w-1/3">
+      <div class="relative w-full">
+        <input type="text" id="searchInput" onkeyup="filterVessels()" 
+          placeholder="Cari berdasarkan Nama, IMO, atau MMSI..." 
+          class="w-full bg-slate-800 text-sm border border-slate-700 rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-blue-500">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <button onclick="fetchDataFromBackend()" class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-2 rounded-lg transition">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        <span>Refresh Data</span>
+      </button>
+      <span class="text-xs bg-slate-800 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/30">● Live Feed</span>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div class="flex h-[calc(100vh-64px)] relative">
+    
+    <!-- SIDEBAR FLEET LIST -->
+    <aside id="sidebar" class="w-80 bg-slate-950/90 backdrop-blur border-r border-slate-800 flex flex-col z-10">
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Armada Terdaftar (<span id="vesselCount">0</span>)</span>
+      </div>
+      
+      <div id="vesselList" class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
+        <!-- Live Item list dari JavaScript -->
+        <div class="p-4 text-center text-slate-500 text-sm">Memuat data armada...</div>
+      </div>
+    </aside>
+
+    <!-- LIVE MAP DISPLAY -->
+    <main class="flex-1 relative">
+      <div id="map"></div>
+    </main>
+
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    // Ganti URL di bawah dengan URL Web App Apps Script Anda setelah di-Deploy!
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwVNTPdA8DlfCuh40ol65K-spcAw77hDyviM5sUhuSJQj_w6cttlb4oNQCj5Sy3MiYWfw/exec";
+
+    let map;
+    let vesselMarkers = {};
+    let geofenceCircles = [];
+    let vesselsData = [];
+
+    // Inisialisasi Peta Leaflet (Tema Dark Ocean)
+    function initMap() {
+      map = L.map('map').setView([-1.2653, 116.8312], 6); // Default Center Indonesia
+      
+      // Tile Layer Dark Mode CartoDB
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 18
+      }).addTo(map);
+
+      fetchDataFromBackend();
+    }
+
+    // Ambil Data dari Backend GAS via REST API
+    async function fetchDataFromBackend() {
+      if (GAS_WEB_APP_URL === "YOUR_GAS_WEB_APP_DEPLOYMENT_URL") {
+        console.warn("Harap masukkan URL Deployment Web App GAS Anda!");
+      }
+
+      try {
+        const response = await fetch(`${GAS_WEB_APP_URL}?action=getVessels`);
+        const result = await response.json();
+
+        if (result.status === "success") {
+          vesselsData = result.data;
+          renderVesselList(vesselsData);
+          renderMarkersOnMap(vesselsData);
+        }
+      } catch (err) {
+        console.error("Gagal mengambil data kapal:", err);
+      }
+    }
+
+    // Render List Kapal di Sidebar
+    function renderVesselList(data) {
+      const container = document.getElementById('vesselList');
+      document.getElementById('vesselCount').innerText = data.length;
+      container.innerHTML = '';
+
+      data.forEach(vessel => {
+        const tel = vessel.telemetry || {};
+        const card = document.createElement('div');
+        card.className = "p-3.5 hover:bg-slate-800/60 cursor-pointer transition flex flex-col gap-1";
+        card.onclick = () => focusOnVessel(vessel.mmsi_number);
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sm text-blue-400">${vessel.vessel_name}</span>
+            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300">${vessel.vessel_type}</span>
+          </div>
+          <div class="text-xs text-slate-400 flex justify-between mt-1">
+            <span>IMO: ${vessel.imo_number}</span>
+            <span>MMSI: ${vessel.mmsi_number}</span>
+          </div>
+          <div class="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-800/80">
+            <span class="text-emerald-400 font-mono">${tel.speed_knots || 0} Knots</span>
+            <span class="text-slate-400 text-[11px]">ETA: ${tel.eta || '-'}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Render Marker Kapal di Peta
+    function renderMarkersOnMap(data) {
+      data.forEach(vessel => {
+        const tel = vessel.telemetry;
+        if (!tel || !tel.latitude || !tel.longitude) return;
+
+        const mmsi = vessel.mmsi_number;
+        const latLng = [tel.latitude, tel.longitude];
+
+        const popupContent = `
+          <div class="p-1 font-sans">
+            <h3 class="font-bold text-slate-900 text-sm border-b pb-1 mb-2">${vessel.vessel_name}</h3>
+            <table class="text-xs text-slate-700 w-full">
+              <tr><td><b>Type:</b></td><td>${vessel.vessel_type}</td></tr>
+              <tr><td><b>IMO / MMSI:</b></td><td>${vessel.imo_number} / ${vessel.mmsi_number}</td></tr>
+              <tr><td><b>Speed:</b></td><td>${tel.speed_knots} Knots</td></tr>
+              <tr><td><b>Heading:</b></td><td>${tel.course_heading}°</td></tr>
+              <tr><td><b>Geofence:</b></td><td><span class="text-blue-600 font-semibold">${tel.geofence_status}</span></td></tr>
+              <tr><td><b>ETA:</b></td><td>${tel.eta}</td></tr>
+            </table>
+          </div>
+        `;
+
+        if (vesselMarkers[mmsi]) {
+          vesselMarkers[mmsi].setLatLng(latLng);
+        } else {
+          const marker = L.marker(latLng).addTo(map).bindPopup(popupContent);
+          vesselMarkers[mmsi] = marker;
+        }
+      });
+    }
+
+    function focusOnVessel(mmsi) {
+      if (vesselMarkers[mmsi]) {
+        const marker = vesselMarkers[mmsi];
+        map.setView(marker.getLatLng(), 11);
+        marker.openPopup();
+      }
+    }
+
+    function filterVessels() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = vesselsData.filter(v => 
+        v.vessel_name.toLowerCase().includes(q) ||
+        v.imo_number.toString().includes(q) ||
+        v.mmsi_number.toString().includes(q)
+      );
+      renderVesselList(filtered);
+    }
+
+    // Load App
+    window.onload = () => {
+      initMap();
+      lucide.createIcons();
+
+      // Register PWA Service Worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Registration Failed', err));
+      }
+    };
+  </script>
+</body>
+</html>
