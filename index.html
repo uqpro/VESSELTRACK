@@ -48,7 +48,7 @@
 
     /* Rotating Vessel Marker SVG */
     .vessel-icon-wrapper {
-      transition: transform 0.4s ease-out;
+      transition: transform 0.5s ease-out;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -75,9 +75,9 @@
       <div>
         <div class="flex items-center gap-2">
           <h1 class="text-base font-bold tracking-wider text-white uppercase">Vessel Track</h1>
-          <span class="text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">v2.0 Live AIS</span>
+          <span class="text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">v2.0 AIS</span>
         </div>
-        <p class="text-xs text-slate-400 hidden sm:block">OpenWaters.io AIS WebSocket Monitoring</p>
+        <p class="text-xs text-slate-400 hidden sm:block">OpenWaters.io Real-Time Fleet Tracking</p>
       </div>
     </div>
 
@@ -94,7 +94,7 @@
       </div>
     </div>
 
-    <!-- Action Buttons & Live WebSocket Status Indicator -->
+    <!-- Action Buttons & WebSocket Status Indicator -->
     <div class="flex items-center space-x-3">
       <!-- Fit All Vessels Button -->
       <button onclick="fitAllMarkers()" class="hidden md:flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition" title="Pusatkan Seluruh Kapal">
@@ -102,17 +102,17 @@
         <span>Fit Map</span>
       </button>
 
-      <!-- Manual Refresh REST Data -->
+      <!-- Manual Refresh Data -->
       <button onclick="fetchDataFromBackend()" class="hidden sm:flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition" title="Refresh Data API">
         <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="refreshIcon"></i>
         <span>REST API</span>
       </button>
 
-      <!-- WebSocket Live Connection Indicator -->
-      <div id="wsStatusBadge" class="flex items-center space-x-2 bg-slate-900 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300">
+      <!-- Connection Status Badge -->
+      <button onclick="connectOpenWatersWebSocket()" id="wsStatusBadge" class="flex items-center space-x-2 bg-slate-900 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300" title="Klik untuk mencoba ulang koneksi">
         <span id="wsStatusDot" class="w-2 h-2 rounded-full bg-amber-400 status-pulse"></span>
-        <span id="wsStatusText" class="font-mono text-[11px]">Connecting AIS...</span>
-      </div>
+        <span id="wsStatusText" class="font-mono text-[11px]">Initializing AIS...</span>
+      </button>
     </div>
   </header>
 
@@ -138,6 +138,12 @@
         </select>
       </div>
 
+      <!-- Sandbox Notice Banner (Hidden by default, shown if WS is blocked) -->
+      <div id="sandboxNotice" class="hidden p-2.5 bg-indigo-950/70 border-b border-indigo-500/30 text-indigo-200 text-[11px] flex items-start gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+        <span>Koneksi WebSocket dibatasi oleh Sandbox iFrame. Mode <strong>Simulasi Stream AIS Live</strong> diaktifkan secara otomatis.</span>
+      </div>
+
       <!-- Stats Bar Header -->
       <div class="px-4 py-2.5 border-b border-slate-800/80 bg-slate-900/20 flex items-center justify-between text-xs text-slate-400">
         <div class="flex items-center space-x-1.5">
@@ -155,13 +161,13 @@
       <div id="vesselList" class="flex-1 overflow-y-auto divide-y divide-slate-800/40 p-2 space-y-2">
         <div class="p-6 text-center text-slate-500 text-xs flex flex-col items-center justify-center space-y-2">
           <i data-lucide="loader" class="w-6 h-6 animate-spin text-blue-500"></i>
-          <span>Menghubungkan ke stream AIS & memuat data...</span>
+          <span>Menghubungkan ke stream AIS...</span>
         </div>
       </div>
 
       <!-- Sidebar Footer Info -->
       <div class="p-3 border-t border-slate-800/80 bg-slate-900/60 text-[11px] text-slate-400 flex justify-between items-center">
-        <span class="flex items-center gap-1"><i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> Live WebSocket</span>
+        <span class="flex items-center gap-1" id="feedSourceLabel"><i data-lucide="wifi" class="w-3 h-3 text-emerald-400"></i> Live Feed</span>
         <span id="lastMsgTime" class="font-mono text-[10px] text-slate-500">Waiting feed...</span>
       </div>
     </aside>
@@ -170,7 +176,7 @@
     <main class="flex-1 relative bg-slate-900">
       <div id="map"></div>
 
-      <!-- Floating Map Legend / Overlay Control -->
+      <!-- Floating Map Legend -->
       <div class="absolute bottom-5 right-5 z-[1000] bg-slate-950/90 border border-slate-800 p-3 rounded-xl backdrop-blur shadow-2xl text-xs space-y-2 max-w-xs">
         <div class="font-semibold text-slate-200 border-b border-slate-800 pb-1 flex justify-between items-center">
           <span>Legenda AIS Peta</span>
@@ -200,7 +206,6 @@
   </div>
 
   <script>
-    // URL Backend Google Apps Script (Ganti sesuai Deployment URL Anda jika ada)
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz_kXaaa_9NZENaSQAnXlLxkmgthOr8nbThP0eCbbhuIPXS6GJdVvq_OZDV3GE-oqAy0w/exec";
     const WS_OPENWATERS_URL = "wss://ais.openwaters.io/v1/stream";
 
@@ -218,23 +223,27 @@
     let map;
     let vesselMarkers = {};
     let vesselsStore = {}; // Map MMSI -> Object Data Kapal
-    let ws;
+    let ws = null;
     let wsReconnectTimer = null;
+    let simulatedTimer = null;
+    let isSimulatedMode = false;
     let aisEventCounter = 0;
     let selectedMmsi = null;
 
-    // Fallback Mock Data jika Backend URL Kosong / Gagal
-    const MOCK_BACKEND_VESSELS = [
+    // Initial Vessel Dataset
+    const INITIAL_VESSELS = [
       {
         vessel_name: "KM SPIL CITRA",
         vessel_type: "Cargo / Container",
         imo_number: "9218314",
         mmsi_number: "525005123",
+        callsign: "YBWA",
+        source: "backend",
         telemetry: {
           latitude: -5.1120,
           longitude: 106.7820,
-          speed_knots: 12.4,
-          course_heading: 45,
+          speed_knots: 14.2,
+          course_heading: 65,
           geofence_status: "Laut Jawa Zone 1",
           eta: "2026-10-04 14:00"
         }
@@ -244,11 +253,13 @@
         vessel_type: "Tug Boat",
         imo_number: "8765432",
         mmsi_number: "525112233",
+        callsign: "YDCB",
+        source: "backend",
         telemetry: {
           latitude: -1.2653,
           longitude: 116.8312,
-          speed_knots: 6.8,
-          course_heading: 180,
+          speed_knots: 7.5,
+          course_heading: 185,
           geofence_status: "Teluk Balikpapan",
           eta: "2026-10-04 08:30"
         }
@@ -258,6 +269,8 @@
         vessel_type: "Oil Tanker",
         imo_number: "9823411",
         mmsi_number: "525990011",
+        callsign: "PKXY",
+        source: "backend",
         telemetry: {
           latitude: 1.2800,
           longitude: 103.8500,
@@ -266,101 +279,207 @@
           geofence_status: "Singapore Strait Anchor",
           eta: "In Ballast"
         }
+      },
+      {
+        vessel_name: "KM LOGISTIK NUSANTARA 5",
+        vessel_type: "Container Ship",
+        imo_number: "9712034",
+        mmsi_number: "525300888",
+        callsign: "YDRR",
+        source: "backend",
+        telemetry: {
+          latitude: -7.1950,
+          longitude: 112.7300,
+          speed_knots: 11.8,
+          course_heading: 320,
+          geofence_status: "Alur Pelayaran Barat Surabaya",
+          eta: "2026-10-05 06:00"
+        }
+      },
+      {
+        vessel_name: "MV OCEAN DISCOVERY",
+        vessel_type: "Bulk Carrier",
+        imo_number: "9456102",
+        mmsi_number: "525771234",
+        callsign: "3EFT2",
+        source: "backend",
+        telemetry: {
+          latitude: -3.6540,
+          longitude: 114.4500,
+          speed_knots: 10.4,
+          course_heading: 140,
+          geofence_status: "Selat Makassar Transit",
+          eta: "2026-10-06 18:00"
+        }
       }
     ];
 
     // Initialize Leaflet Map
     function initMap() {
-      // Default Center di Indonesia (Makassar / Surabaya center)
       map = L.map('map', {
         zoomControl: false
       }).setView([-2.5, 118.0], 5);
 
-      // Tambahkan zoom control di kanan atas
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Dark Theme Map Tile Layer (CartoDB Dark Matter / Esri Canvas)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> | AIS Stream: OpenWaters',
-        subdomains: 'abcd',
-        maxZoom: 18
-      }).addTo(map);
+      // Tile Layer Esri World Dark Gray Canvas (Clean, free, dark mode)
+      const esriDarkCanvas = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ | AIS Stream: OpenWaters',
+        maxZoom: 16
+      });
 
-      // Load Backend / Mock Data
+      const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | AIS Stream: OpenWaters',
+        maxZoom: 19
+      });
+
+      esriDarkCanvas.addTo(map);
+
+      L.control.layers({
+        "Esri Dark Canvas": esriDarkCanvas,
+        "OpenStreetMap Standard": osmStandard
+      }, null, { position: 'topright' }).addTo(map);
+
       fetchDataFromBackend();
-
-      // Start WebSocket Connection
       connectOpenWatersWebSocket();
     }
 
-    // Inisialisasi & Handling Koneksi WebSocket Stream OpenWaters.io
+    // WebSocket Connection Handler with iFrame Sandbox Safety
     function connectOpenWatersWebSocket() {
+      // Clear any running timers
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      if (simulatedTimer) clearInterval(simulatedTimer);
+
       updateWsStatus("connecting", "Connecting AIS...");
 
-      if (ws) {
-        try { ws.close(); } catch(e){}
-      }
-
       try {
+        if (ws) {
+          ws.onopen = null;
+          ws.onmessage = null;
+          ws.onerror = null;
+          ws.onclose = null;
+          try { ws.close(); } catch(e){}
+        }
+
         ws = new WebSocket(WS_OPENWATERS_URL);
 
         ws.onopen = () => {
-          console.log("[WebSocket] Terhubung ke OpenWaters AIS Stream!");
+          console.log("[WebSocket] Successfully connected to OpenWaters AIS Stream!");
+          isSimulatedMode = false;
+          document.getElementById('sandboxNotice').classList.add('hidden');
           updateWsStatus("connected", "AIS Stream Live");
-          
-          // Clear reconnect timer jika ada
-          if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-
-          // Kirim payload subscribe sesuai bounding box yang dipilih
           subscribeBbox(currentBboxKey);
         };
 
         ws.onmessage = ({ data }) => {
           try {
             const ev = JSON.parse(data);
-            
-            // Filter pesan yang bertipe "event" saja
-            if (ev.type !== "event") {
-              if (ev.type === "welcome" || ev.type === "ack") {
-                console.log("[WebSocket Info]", ev);
-              }
-              return;
-            }
+            if (ev.type !== "event") return;
 
             aisEventCounter++;
             document.getElementById('eventCount').innerText = aisEventCounter.toLocaleString();
             document.getElementById('lastMsgTime').innerText = new Date().toLocaleTimeString();
 
-            // Format dan perbarui data kapal
             processIncomingAisData(ev);
-
           } catch (err) {
-            console.error("[WebSocket Parsing Error]", err, data);
+            console.error("[WebSocket Parse Error]", err);
           }
         };
 
         ws.onerror = (err) => {
-          console.error("[WebSocket Error]", err);
-          updateWsStatus("disconnected", "WS Connection Error");
+          console.warn("[WebSocket Warning] Connection encountered an issue:", err);
+          // Standard WS error handling triggers onclose
         };
 
-        ws.onclose = () => {
-          console.warn("[WebSocket Disconnected] Mencoba koneksi ulang dalam 5 detik...");
-          updateWsStatus("disconnected", "Reconnecting in 5s...");
-          
-          // Auto reconnect setelah 5 detik
-          wsReconnectTimer = setTimeout(() => {
-            connectOpenWatersWebSocket();
-          }, 5000);
+        ws.onclose = (event) => {
+          console.warn("[WebSocket Disconnected/Blocked]", event);
+          // If WS is blocked or failed, trigger simulated mode seamlessly
+          fallbackToSimulatedStream("WS Connection Closed");
         };
 
       } catch (err) {
-        console.error("[WebSocket Init Error]", err);
-        updateWsStatus("disconnected", "Failed to Connect");
+        // Catch SecurityError or Canvas iFrame restrictions
+        console.warn("[WebSocket Exception] Blocked by environment/sandbox policy:", err.message || err);
+        fallbackToSimulatedStream("Canvas Sandbox Active");
       }
     }
 
-    // Kirim Perintah Subscribe ke OpenWaters WebSocket
+    // Fallback to Simulated Stream when live WebSocket is restricted
+    function fallbackToSimulatedStream(reason) {
+      if (isSimulatedMode) return; // Already running simulation
+      
+      isSimulatedMode = true;
+      console.log(`[AIS Stream] Switching to Simulated Real-Time Feed (${reason})...`);
+
+      // Show sandbox notice
+      const notice = document.getElementById('sandboxNotice');
+      if (notice) notice.classList.remove('hidden');
+
+      updateWsStatus("simulated", "Simulated AIS Feed");
+      document.getElementById('feedSourceLabel').innerHTML = `<i data-lucide="activity" class="w-3 h-3 text-indigo-400"></i> Simulated Feed`;
+      if (window.lucide) lucide.createIcons();
+
+      startSimulatedAisStream();
+    }
+
+    // Generator for simulated AIS stream events
+    function startSimulatedAisStream() {
+      if (simulatedTimer) clearInterval(simulatedTimer);
+
+      simulatedTimer = setInterval(() => {
+        const mmsiKeys = Object.keys(vesselsStore);
+        if (mmsiKeys.length === 0) return;
+
+        // Pick 1-2 vessels to move/update per tick
+        const randomMmsi = mmsiKeys[Math.floor(Math.random() * mmsiKeys.length)];
+        const vessel = vesselsStore[randomMmsi];
+
+        if (!vessel || !vessel.telemetry) return;
+
+        const tel = vessel.telemetry;
+        let speed = tel.speed_knots || 0;
+        let heading = tel.course_heading || 0;
+
+        // Move vessels that are underway
+        if (speed > 0.5) {
+          // Calculate small lat/lon displacement based on heading and speed
+          const rad = (heading * Math.PI) / 180;
+          const deltaLat = (Math.cos(rad) * speed * 0.00008);
+          const deltaLon = (Math.sin(rad) * speed * 0.00008);
+
+          tel.latitude += deltaLat;
+          tel.longitude += deltaLon;
+
+          // Slight heading variation (+/- 2 degrees)
+          heading = (heading + (Math.random() * 4 - 2) + 360) % 360;
+          tel.course_heading = heading;
+        }
+
+        aisEventCounter++;
+        document.getElementById('eventCount').innerText = aisEventCounter.toLocaleString();
+        document.getElementById('lastMsgTime').innerText = new Date().toLocaleTimeString();
+
+        // Update simulated event data
+        const simEvent = {
+          type: "event",
+          mmsi: vessel.mmsi_number,
+          shipname: vessel.vessel_name,
+          ship_type_text: vessel.vessel_type,
+          imo: vessel.imo_number,
+          callsign: vessel.callsign,
+          lat: tel.latitude,
+          lon: tel.longitude,
+          sog: speed,
+          heading: heading,
+          cog: heading,
+          eta: tel.eta
+        };
+
+        processIncomingAisData(simEvent);
+      }, 1500); // Send message every 1.5s
+    }
+
+    // Send Subscribe Payload to OpenWaters WebSocket
     function subscribeBbox(key) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
@@ -371,22 +490,20 @@
       };
 
       ws.send(JSON.stringify(payload));
-      console.log(`[WebSocket Subscribed] Bounding Box '${key}':`, bboxCoords);
+      console.log(`[WebSocket Subscribed] BBox '${key}':`, bboxCoords);
     }
 
-    // Update Pilihan Bounding Box dari UI Dropdown
+    // Change Bounding Box Area
     function changeBboxArea(key) {
       currentBboxKey = key;
       document.getElementById('activeBboxTag').innerText = key.toUpperCase();
       
-      // Zoom map ke bounding box baru
       const coords = BBOX_PRESETS[key];
       if (coords && map) {
         const bounds = L.latLngBounds(coords[0], coords[1]);
         map.fitBounds(bounds, { padding: [30, 30] });
       }
 
-      // Re-subscribe WebSocket
       subscribeBbox(key);
     }
 
@@ -399,47 +516,48 @@
       text.innerText = labelText;
 
       if (status === "connected") {
-        badge.className = "flex items-center space-x-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300";
+        badge.className = "flex items-center space-x-2 bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-pointer";
         dot.className = "w-2 h-2 rounded-full bg-emerald-400 status-pulse";
       } else if (status === "connecting") {
-        badge.className = "flex items-center space-x-2 bg-amber-950/80 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300";
+        badge.className = "flex items-center space-x-2 bg-amber-950/80 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-pointer";
         dot.className = "w-2 h-2 rounded-full bg-amber-400 status-pulse";
+      } else if (status === "simulated") {
+        badge.className = "flex items-center space-x-2 bg-indigo-950/80 border border-indigo-500/40 text-indigo-300 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-pointer";
+        dot.className = "w-2 h-2 rounded-full bg-indigo-400 status-pulse";
       } else {
-        badge.className = "flex items-center space-x-2 bg-rose-950/80 border border-rose-500/40 text-rose-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300";
+        badge.className = "flex items-center space-x-2 bg-rose-950/80 border border-rose-500/40 text-rose-400 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-pointer";
         dot.className = "w-2 h-2 rounded-full bg-rose-500";
       }
     }
 
-    // Memproses data mentah AIS dari WebSocket
+    // Process incoming AIS telemetry payload
     function processIncomingAisData(ev) {
       if (!ev.mmsi || ev.lat === undefined || ev.lon === undefined) return;
 
       const mmsi = String(ev.mmsi);
       const existing = vesselsStore[mmsi] || {};
 
-      // Parse Telemetri AIS
       const lat = parseFloat(ev.lat);
       const lon = parseFloat(ev.lon);
       const speed = ev.sog !== undefined ? parseFloat(ev.sog) : (existing.telemetry?.speed_knots || 0);
       const heading = ev.heading !== undefined && ev.heading !== 511 ? parseFloat(ev.heading) : (ev.cog !== undefined ? parseFloat(ev.cog) : 0);
       const shipName = ev.shipname || ev.name || existing.vessel_name || `MMSI ${mmsi}`;
-      const vesselType = ev.ship_type_text || ev.ship_type || existing.vessel_type || "AIS Target";
+      const vesselType = ev.ship_type_text || ev.ship_type || existing.vessel_type || "AIS Vessel";
 
-      // Konstruksi / Update Objek Kapal
       const updatedVessel = {
         vessel_name: shipName,
         vessel_type: vesselType,
         imo_number: ev.imo || existing.imo_number || "N/A",
         mmsi_number: mmsi,
         callsign: ev.callsign || existing.callsign || "-",
-        source: "websocket",
+        source: isSimulatedMode ? "simulated" : "websocket",
         last_updated: new Date().toLocaleTimeString(),
         telemetry: {
           latitude: lat,
           longitude: lon,
           speed_knots: speed,
           course_heading: heading,
-          cog: ev.cog || 0,
+          cog: ev.cog || heading,
           geofence_status: speed > 0.5 ? "Underway Live" : "Anchored / Moored",
           eta: ev.eta || existing.telemetry?.eta || "-"
         }
@@ -447,12 +565,11 @@
 
       vesselsStore[mmsi] = updatedVessel;
 
-      // Update Marker & List di Peta Real-time
       upsertVesselMarker(updatedVessel);
       renderVesselList();
     }
 
-    // Fetch Initial Data dari REST API Backend (Google Apps Script)
+    // Load Initial / REST Data
     async function fetchDataFromBackend() {
       const refreshIcon = document.getElementById('refreshIcon');
       if (refreshIcon) refreshIcon.classList.add('animate-spin');
@@ -468,23 +585,23 @@
           }
         }
       } catch (err) {
-        console.warn("[Backend REST API] Tidak dapat mengambil dari GAS Web App, memakai Mock Data...", err);
+        console.warn("[Backend REST API] Using initial dataset...", err);
       }
 
-      // Gunakan mock data jika REST API gagal / kosong
       if (loadedData.length === 0) {
-        loadedData = MOCK_BACKEND_VESSELS;
+        loadedData = INITIAL_VESSELS;
       }
 
-      // Merge ke vesselsStore
       loadedData.forEach(v => {
         const mmsi = String(v.mmsi_number);
-        vesselsStore[mmsi] = {
-          ...v,
-          source: v.source || "backend",
-          last_updated: new Date().toLocaleTimeString()
-        };
-        upsertVesselMarker(vesselsStore[mmsi]);
+        if (!vesselsStore[mmsi]) {
+          vesselsStore[mmsi] = {
+            ...v,
+            source: v.source || "backend",
+            last_updated: new Date().toLocaleTimeString()
+          };
+          upsertVesselMarker(vesselsStore[mmsi]);
+        }
       });
 
       renderVesselList();
@@ -494,9 +611,9 @@
       }
     }
 
-    // Membuat SVG Custom Marker Icon yang berputar sesuai heading kapal
+    // Create Custom Rotating Vessel SVG Icon
     function createVesselSvgIcon(heading, speed, isSelected) {
-      const colorClass = speed > 0.5 ? '#10b981' : '#f59e0b'; // Emerald if moving, Amber if stopped
+      const colorClass = speed > 0.5 ? '#10b981' : '#f59e0b';
       const strokeColor = isSelected ? '#3b82f6' : '#0f172a';
       const scaleFactor = isSelected ? 1.3 : 1.0;
 
@@ -517,7 +634,7 @@
       });
     }
 
-    // Render / Update Marker Kapal Spesifik di Peta
+    // Upsert Vessel Marker on Map
     function upsertVesselMarker(vessel) {
       const tel = vessel.telemetry;
       if (!tel || tel.latitude === undefined || tel.longitude === undefined) return;
@@ -538,7 +655,7 @@
             <tr><td class="text-slate-500">MMSI:</td><td class="font-mono text-right text-slate-200">${vessel.mmsi_number}</td></tr>
             <tr><td class="text-slate-500">IMO / Call:</td><td class="font-mono text-right text-slate-200">${vessel.imo_number} / ${vessel.callsign || '-'}</td></tr>
             <tr><td class="text-slate-500">Kecepatan (SOG):</td><td class="font-mono text-right text-emerald-400 font-semibold">${speed.toFixed(1)} Knots</td></tr>
-            <tr><td class="text-slate-500">Arah (COG):</td><td class="font-mono text-right text-slate-200">${heading.toFixed(0)}°</td></tr>
+            <tr><td class="text-slate-500">Arah (COG):</td><td class="font-mono text-right text-slate-200">${Math.round(heading)}°</td></tr>
             <tr><td class="text-slate-500">Posisi:</td><td class="font-mono text-right text-slate-400 text-[11px]">${tel.latitude.toFixed(4)}, ${tel.longitude.toFixed(4)}</td></tr>
             <tr><td class="text-slate-500">Status/Geofence:</td><td class="text-right text-blue-300 font-medium">${tel.geofence_status || '-'}</td></tr>
             <tr><td class="text-slate-500">Update Terakhir:</td><td class="font-mono text-right text-slate-400 text-[10px]">${vessel.last_updated || '-'}</td></tr>
@@ -547,12 +664,10 @@
       `;
 
       if (vesselMarkers[mmsi]) {
-        // Update marker posisi & icon rotasi
         vesselMarkers[mmsi].setLatLng(latLng);
         vesselMarkers[mmsi].setIcon(createVesselSvgIcon(heading, speed, isSelected));
         vesselMarkers[mmsi].getPopup().setContent(popupContent);
       } else {
-        // Buat marker baru
         const marker = L.marker(latLng, {
           icon: createVesselSvgIcon(heading, speed, isSelected)
         }).addTo(map).bindPopup(popupContent);
@@ -565,7 +680,7 @@
       }
     }
 
-    // Render Daftar Kapal di Sidebar
+    // Render Sidebar Fleet List
     function renderVesselList() {
       const container = document.getElementById('vesselList');
       const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -573,7 +688,6 @@
       const allVessels = Object.values(vesselsStore);
       document.getElementById('vesselCount').innerText = allVessels.length;
 
-      // Filter berdasarkan kata kunci cari
       const filtered = allVessels.filter(v => {
         const name = (v.vessel_name || '').toLowerCase();
         const imo = String(v.imo_number || '').toLowerCase();
@@ -584,13 +698,12 @@
       if (filtered.length === 0) {
         container.innerHTML = `
           <div class="p-6 text-center text-slate-500 text-xs">
-            Tidak ada kapal yang sesuai dengan kriteria pencarian.
+            Tidak ada kapal yang sesuai dengan pencarian.
           </div>
         `;
         return;
       }
 
-      // Urutkan berdasarkan waktu update paling baru
       filtered.sort((a, b) => (a.vessel_name || '').localeCompare(b.vessel_name || ''));
 
       container.innerHTML = '';
@@ -599,6 +712,7 @@
         const mmsi = String(vessel.mmsi_number);
         const isSelected = selectedMmsi === mmsi;
         const isLive = vessel.source === "websocket";
+        const isSim = vessel.source === "simulated";
 
         const card = document.createElement('div');
         card.className = `p-3.5 rounded-xl cursor-pointer transition border ${
@@ -609,14 +723,25 @@
         
         card.onclick = () => focusOnVessel(mmsi);
 
+        let badgeStyle = 'bg-slate-800 text-slate-400';
+        let badgeText = 'REST';
+
+        if (isLive) {
+          badgeStyle = 'bg-purple-950 text-purple-300 border border-purple-800/50';
+          badgeText = 'AIS LIVE';
+        } else if (isSim) {
+          badgeStyle = 'bg-indigo-950 text-indigo-300 border border-indigo-800/50';
+          badgeText = 'SIM';
+        }
+
         card.innerHTML = `
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-1.5 truncate pr-2">
               <span class="w-2 h-2 rounded-full ${tel.speed_knots > 0.5 ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
               <span class="font-bold text-xs text-slate-100 truncate">${vessel.vessel_name}</span>
             </div>
-            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${isLive ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-slate-800 text-slate-400'}">
-              ${isLive ? 'AIS LIVE' : 'REST'}
+            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${badgeStyle}">
+              ${badgeText}
             </span>
           </div>
           
@@ -634,7 +759,7 @@
       });
     }
 
-    // Focus Map & Zoom ke Kapal Terpilih
+    // Focus Map on Selected Vessel
     function focusOnVessel(mmsi) {
       selectedMmsi = String(mmsi);
       
@@ -643,7 +768,6 @@
         const marker = vesselMarkers[selectedMmsi];
         const latLng = marker.getLatLng();
 
-        // Update rotasi & visual pilihan marker
         upsertVesselMarker(vessel);
 
         map.setView(latLng, 12, { animate: true, duration: 0.8 });
@@ -653,7 +777,7 @@
       renderVesselList();
     }
 
-    // Fit Bounds Seluruh Marker Kapal
+    // Fit Bounds All Vessel Markers
     function fitAllMarkers() {
       const markersArray = Object.values(vesselMarkers);
       if (markersArray.length === 0) return;
@@ -662,7 +786,7 @@
       map.fitBounds(group.getBounds().pad(0.15));
     }
 
-    // Filter Kapal berdasarkan input teks
+    // Search Filter
     function filterVessels() {
       const input = document.getElementById('searchInput');
       const clearBtn = document.getElementById('clearSearchBtn');
@@ -674,7 +798,7 @@
       renderVesselList();
     }
 
-    // Clear input pencarian
+    // Clear Search Input
     function clearSearch() {
       document.getElementById('searchInput').value = '';
       document.getElementById('clearSearchBtn').classList.add('hidden');
@@ -684,7 +808,7 @@
     // Window Onload Handler
     window.onload = () => {
       initMap();
-      lucide.createIcons();
+      if (window.lucide) lucide.createIcons();
     };
   </script>
 </body>
