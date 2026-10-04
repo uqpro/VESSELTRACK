@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Vessel Track - Real-Time Maritime AIS Monitoring</title>
+  <title>Vessel Track - Real-Time Maritime AIS Monitoring & GeoJSON</title>
   
   <meta name="theme-color" content="#0F172A">
 
@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Leaflet MarkerCluster CSS & JS for Overcrowding Fix -->
+  <!-- Leaflet MarkerCluster CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -113,9 +113,9 @@
     }
     .status-pulse { animation: pulse-ring 2s infinite ease-in-out; }
 
-    /* Drawer & Sidebar Transition */
+    /* Drawer Animation */
     .drawer-slide-left {
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.3s ease-in-out;
     }
   </style>
 </head>
@@ -123,11 +123,11 @@
 
   <!-- HEADER / TOPBAR -->
   <header class="h-14 sm:h-16 bg-slate-950/95 border-b border-slate-800/80 flex items-center justify-between px-3 sm:px-4 z-30 shrink-0 backdrop-blur">
-    <!-- Brand Info & Sidebar Toggle -->
+    <!-- Brand Info & Mobile Toggle -->
     <div class="flex items-center space-x-2 sm:space-x-3">
-      <!-- Universal Sidebar Toggle Button -->
-      <button onclick="toggleSidebar()" id="sidebarToggleBtn" class="p-2 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800 transition shadow-sm flex items-center justify-center" title="Tampilkan / Sembunyikan Sidebar Armada">
-        <i data-lucide="panel-left-close" class="w-5 h-5 text-blue-400"></i>
+      <!-- Mobile Sidebar Toggle -->
+      <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 rounded-lg bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white" title="Buka Armada">
+        <i data-lucide="menu" class="w-5 h-5"></i>
       </button>
 
       <div class="p-1.5 sm:p-2 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400 shrink-0">
@@ -138,14 +138,14 @@
           <h1 class="text-xs sm:text-sm md:text-base font-bold tracking-wider text-white uppercase">Vessel Track</h1>
           <span class="text-[9px] sm:text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded-full">CLUSTER AIS LIVE</span>
         </div>
-        <p class="text-[10px] sm:text-xs text-slate-400 hidden md:block">Real-Time Maritime Monitoring & High-Density Clustering</p>
+        <p class="text-[10px] sm:text-xs text-slate-400 hidden md:block">Real-Time Maritime Monitoring & GeoJSON Snapshot</p>
       </div>
     </div>
 
     <!-- Search Input Bar -->
     <div class="flex items-center space-x-2 w-2/5 max-w-sm">
       <div class="relative w-full">
-        <input type="text" id="searchInput" onkeyup="filterVessels()" 
+        <input type="text" id="searchInput" oninput="filterVessels()" 
           placeholder="Cari Kapal, IMO, MMSI..." 
           class="w-full bg-slate-900/90 text-xs text-slate-100 border border-slate-700/80 rounded-xl pl-8 pr-7 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 transition placeholder-slate-500 shadow-inner">
         <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 sm:top-3"></i>
@@ -157,6 +157,12 @@
 
     <!-- Right Quick Controls -->
     <div class="flex items-center space-x-2">
+      <!-- GeoJSON Export Button (Desktop Header) -->
+      <button onclick="downloadGeoJsonSnapshot()" class="hidden sm:flex items-center space-x-1.5 bg-emerald-600/90 hover:bg-emerald-500 border border-emerald-400 text-white text-xs px-2.5 py-1.5 rounded-lg transition shadow-lg" title="Unduh Snapshot GeoJSON">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+        <span class="hidden md:inline font-medium">Export GeoJSON</span>
+      </button>
+
       <button onclick="fitAllMarkers()" class="hidden sm:flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg transition" title="Pusatkan Seluruh Kapal">
         <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-blue-400"></i>
         <span class="hidden md:inline">Fit Map</span>
@@ -174,22 +180,11 @@
   <div class="flex flex-1 overflow-hidden relative">
     
     <!-- Mobile Sidebar Backdrop Overlay -->
-    <div id="sidebarBackdrop" onclick="toggleSidebar(false)" class="hidden fixed inset-0 bg-slate-950/80 z-20 backdrop-blur-sm lg:hidden transition-opacity"></div>
+    <div id="sidebarBackdrop" onclick="toggleMobileSidebar(false)" class="hidden fixed inset-0 bg-slate-950/80 z-20 backdrop-blur-sm lg:hidden transition-opacity"></div>
 
     <!-- SIDEBAR FLEET PANEL -->
-    <aside id="sidebar" class="fixed lg:relative inset-y-0 left-0 w-80 sm:w-88 bg-slate-950/95 border-r border-slate-800/80 flex flex-col z-30 drawer-slide-left backdrop-blur shrink-0 transition-all duration-300">
+    <aside id="sidebar" class="fixed lg:relative inset-y-0 left-0 w-80 sm:w-88 bg-slate-950/95 border-r border-slate-800/80 flex flex-col z-30 transform -translate-x-full lg:translate-x-0 drawer-slide-left backdrop-blur shrink-0">
       
-      <!-- Sidebar Header Bar -->
-      <div class="px-3.5 py-2.5 border-b border-slate-800/80 bg-slate-900/80 flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-          <i data-lucide="layers" class="w-4 h-4 text-blue-400"></i>
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-200">Armada & AIS Feed</span>
-        </div>
-        <button onclick="toggleSidebar(false)" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition" title="Sembunyikan Sidebar">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-
       <!-- Area Selector Bounding Box -->
       <div class="p-3 border-b border-slate-800/80 bg-slate-900/50 space-y-2">
         <div class="flex items-center justify-between">
@@ -211,12 +206,18 @@
           <button onclick="setStatusFilter('moving')" id="btnFilterMoving" class="text-[10px] font-medium py-1 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200">Berlayar</button>
           <button onclick="setStatusFilter('anchored')" id="btnFilterAnchored" class="text-[10px] font-medium py-1 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200">Berlabuh</button>
         </div>
+
+        <!-- Mobile/Sidebar Download GeoJSON Button -->
+        <button onclick="downloadGeoJsonSnapshot()" class="w-full mt-2 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 border border-emerald-400 text-white text-xs py-1.5 rounded-lg transition font-medium">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Download GeoJSON BBox Snapshot</span>
+        </button>
       </div>
 
       <!-- Live Sandbox Safety Notice -->
       <div id="sandboxNotice" class="hidden p-2.5 bg-indigo-950/80 border-b border-indigo-500/30 text-indigo-200 text-[11px] flex items-start gap-2">
         <i data-lucide="info" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
-        <span>Mode **Simulasi AIS Real-Time** aktif (iFrame Sandbox membatasi WebSocket langsung).</span>
+        <span>Mode <strong>Simulasi AIS Real-Time</strong> aktif.</span>
       </div>
 
       <!-- Fleet Stats Bar -->
@@ -252,14 +253,8 @@
       <!-- Leaflet Map Container -->
       <div id="map"></div>
 
-      <!-- FLOATING EXPAND SIDEBAR BUTTON (VISIBLE WHEN SIDEBAR IS COLLAPSED) -->
-      <button id="floatingExpandSidebarBtn" onclick="toggleSidebar(true)" class="hidden absolute top-3 left-3 z-[1000] bg-slate-950/90 hover:bg-slate-900 border border-slate-700/80 text-blue-400 p-2 sm:px-3 sm:py-2 rounded-xl shadow-2xl backdrop-blur flex items-center space-x-2 transition hover:scale-105">
-        <i data-lucide="panel-left-open" class="w-5 h-5"></i>
-        <span class="text-xs font-semibold text-slate-200 hidden sm:inline">Buka Armada</span>
-      </button>
-
       <!-- FLOATING LIVE ACTIVITY TICKER BANNER (TOP LEFT MAP) -->
-      <div class="absolute top-3 left-12 sm:left-38 z-[1000] pointer-events-none transition-all duration-300" id="tickerContainer">
+      <div class="absolute top-3 left-3 right-3 sm:right-auto z-[1000] pointer-events-none">
         <div id="liveFeedTicker" class="bg-slate-950/90 border border-slate-800/90 text-slate-200 text-xs px-3 py-1.5 rounded-xl shadow-2xl backdrop-blur flex items-center space-x-2 max-w-md pointer-events-auto transition-all">
           <span class="w-2 h-2 rounded-full bg-emerald-400 status-pulse shrink-0"></span>
           <span class="text-[11px] font-mono truncate" id="tickerText">Sistem AIS & Marker Cluster aktif...</span>
@@ -274,9 +269,9 @@
             <div class="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
               <i data-lucide="navigation" class="w-4 h-4"></i>
             </div>
-            <div>
-              <h2 id="hudVesselName" class="font-bold text-sm text-white truncate">KM SPIL CITRA</h2>
-              <p id="hudVesselType" class="text-[10px] text-blue-400 font-mono">Cargo Container</p>
+            <div class="truncate">
+              <h2 id="hudVesselName" class="font-bold text-sm text-white truncate">-</h2>
+              <p id="hudVesselType" class="text-[10px] text-blue-400 font-mono">-</p>
             </div>
           </div>
           <button onclick="closeVesselDetailPanel()" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
@@ -289,36 +284,36 @@
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <span class="text-[10px] text-slate-400 block mb-0.5">Kecepatan (SOG)</span>
             <div class="flex items-baseline space-x-1">
-              <span id="hudSpeed" class="text-base font-bold font-mono text-emerald-400">14.2</span>
+              <span id="hudSpeed" class="text-base font-bold font-mono text-emerald-400">0.0</span>
               <span class="text-[10px] text-slate-400">Knots</span>
             </div>
-            <span id="hudSpeedKmh" class="text-[10px] text-slate-500 font-mono block">26.3 km/h</span>
+            <span id="hudSpeedKmh" class="text-[10px] text-slate-500 font-mono block">0.0 km/h</span>
           </div>
 
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <span class="text-[10px] text-slate-400 block mb-0.5">Haluan & COG</span>
             <div class="flex items-center space-x-1.5">
               <i data-lucide="compass" class="w-4 h-4 text-blue-400 transition-transform duration-500" id="compassIcon"></i>
-              <span id="hudHeading" class="text-base font-bold font-mono text-white">065°</span>
+              <span id="hudHeading" class="text-base font-bold font-mono text-white">000°</span>
             </div>
-            <span id="hudNavStatus" class="text-[10px] text-blue-300 font-medium block truncate">Underway Live</span>
+            <span id="hudNavStatus" class="text-[10px] text-blue-300 font-medium block truncate">-</span>
           </div>
 
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <span class="text-[10px] text-slate-400 block mb-0.5">MMSI & IMO</span>
-            <span id="hudMmsi" class="font-mono text-slate-200 block text-[11px]">525005123</span>
-            <span id="hudImo" class="font-mono text-slate-400 text-[10px] block">IMO: 9218314</span>
+            <span id="hudMmsi" class="font-mono text-slate-200 block text-[11px]">-</span>
+            <span id="hudImo" class="font-mono text-slate-400 text-[10px] block">IMO: -</span>
           </div>
 
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <span class="text-[10px] text-slate-400 block mb-0.5">Koordinat Posisi</span>
-            <span id="hudCoords" class="font-mono text-slate-200 block text-[10px]">Lat: -5.1120<br>Lon: 106.7820</span>
+            <span id="hudCoords" class="font-mono text-slate-200 block text-[10px]">Lat: -<br>Lon: -</span>
           </div>
         </div>
 
         <!-- Additional Status Info -->
         <div class="bg-slate-900/40 p-2 rounded-xl border border-slate-800/80 text-[11px] flex justify-between items-center text-slate-400 font-mono mb-3">
-          <span>Callsign: <strong id="hudCallsign" class="text-slate-200">YBWA</strong></span>
+          <span>Callsign: <strong id="hudCallsign" class="text-slate-200">-</strong></span>
           <span>Update: <strong id="hudLastUpdate" class="text-emerald-400">Baru Saja</strong></span>
         </div>
 
@@ -552,7 +547,8 @@
         ws.onopen = () => {
           console.log("[WebSocket] Terhubung ke OpenWaters AIS Stream!");
           isSimulatedMode = false;
-          document.getElementById('sandboxNotice').classList.add('hidden');
+          const notice = document.getElementById('sandboxNotice');
+          if (notice) notice.classList.add('hidden');
           updateWsStatus("connected", "AIS Stream Live");
           subscribeBbox(currentBboxKey);
         };
@@ -604,7 +600,6 @@
     function startSimulatedAisStream() {
       if (simulatedTimer) clearInterval(simulatedTimer);
 
-      // Generate additional realistic simulated vessels across Indonesia waters
       generateMoreSimulatedVessels();
 
       simulatedTimer = setInterval(() => {
@@ -625,8 +620,8 @@
           const deltaLat = (Math.cos(rad) * speed * 0.00008);
           const deltaLon = (Math.sin(rad) * speed * 0.00008);
 
-          tel.latitude += deltaLat;
-          tel.longitude += deltaLon;
+          tel.latitude = (tel.latitude || 0) + deltaLat;
+          tel.longitude = (tel.longitude || 0) + deltaLon;
           heading = (heading + (Math.random() * 4 - 2) + 360) % 360;
           tel.course_heading = heading;
         }
@@ -717,6 +712,72 @@
       subscribeBbox(key);
     }
 
+    /* =========================================================
+       FUNGSI EKSPOR GEOJSON SNAPSHOT
+       ========================================================= */
+    function downloadGeoJsonSnapshot() {
+      const vessels = Object.values(vesselsStore);
+
+      if (vessels.length === 0) {
+        alert("Tidak ada data kapal untuk di-export.");
+        return;
+      }
+
+      const activeBbox = BBOX_PRESETS[currentBboxKey];
+
+      // Format GeoJSON FeatureCollection sesuai standar IETF RFC 7946
+      const geojson = {
+        type: "FeatureCollection",
+        metadata: {
+          title: "Vessel Track AIS GeoJSON Snapshot",
+          generated_at: new Date().toISOString(),
+          bbox_area: currentBboxKey,
+          total_vessels: vessels.length
+        },
+        bbox: activeBbox ? [
+          activeBbox[0][1], // minLon
+          activeBbox[0][0], // minLat
+          activeBbox[1][1], // maxLon
+          activeBbox[1][0]  // maxLat
+        ] : undefined,
+        features: vessels.map(v => {
+          const tel = v.telemetry || {};
+          return {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [
+                tel.longitude !== undefined ? tel.longitude : 0, 
+                tel.latitude !== undefined ? tel.latitude : 0
+              ] // WGS84: [Longitude, Latitude]
+            },
+            properties: {
+              mmsi: v.mmsi_number,
+              vessel_name: v.vessel_name,
+              vessel_type: v.vessel_type,
+              imo: v.imo_number,
+              callsign: v.callsign,
+              speed_knots: tel.speed_knots,
+              course_heading: tel.course_heading,
+              geofence_status: tel.geofence_status,
+              eta: tel.eta,
+              source: v.source,
+              last_updated: v.last_updated
+            }
+          };
+        })
+      };
+
+      // Trigger Unduh File .geojson
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojson, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `vessel_snapshot_${currentBboxKey}_${Date.now()}.geojson`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
     function updateWsStatus(status, labelText) {
       const badge = document.getElementById('wsStatusBadge');
       const dot = document.getElementById('wsStatusDot');
@@ -740,15 +801,20 @@
     }
 
     function processIncomingAisData(ev) {
-      if (!ev.mmsi || ev.lat === undefined || ev.lon === undefined) return;
+      if (!ev.mmsi || ev.lat === undefined || ev.lat === null || ev.lon === undefined || ev.lon === null) return;
 
       const mmsi = String(ev.mmsi);
       const existing = vesselsStore[mmsi] || {};
 
       const lat = parseFloat(ev.lat);
       const lon = parseFloat(ev.lon);
-      const speed = ev.sog !== undefined ? parseFloat(ev.sog) : (existing.telemetry?.speed_knots || 0);
-      const heading = ev.heading !== undefined && ev.heading !== 511 ? parseFloat(ev.heading) : (ev.cog !== undefined ? parseFloat(ev.cog) : 0);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const speed = ev.sog !== undefined && ev.sog !== null ? parseFloat(ev.sog) : (existing.telemetry?.speed_knots || 0);
+      const heading = ev.heading !== undefined && ev.heading !== null && ev.heading !== 511 
+        ? parseFloat(ev.heading) 
+        : (ev.cog !== undefined && ev.cog !== null ? parseFloat(ev.cog) : (existing.telemetry?.course_heading || 0));
+      
       const shipName = ev.shipname || ev.name || existing.vessel_name || `MMSI ${mmsi}`;
       const vesselType = ev.ship_type_text || ev.ship_type || existing.vessel_type || "AIS Vessel";
 
@@ -763,8 +829,8 @@
         telemetry: {
           latitude: lat,
           longitude: lon,
-          speed_knots: speed,
-          course_heading: heading,
+          speed_knots: isNaN(speed) ? 0 : speed,
+          course_heading: isNaN(heading) ? 0 : heading,
           cog: ev.cog || heading,
           geofence_status: speed > 0.5 ? "Underway Live" : "Anchored / Moored",
           eta: ev.eta || existing.telemetry?.eta || "-"
@@ -842,7 +908,7 @@
 
     function upsertVesselMarker(vessel) {
       const tel = vessel.telemetry;
-      if (!tel || tel.latitude === undefined || tel.longitude === undefined) return;
+      if (!tel || tel.latitude === undefined || tel.latitude === null || tel.longitude === undefined || tel.longitude === null) return;
 
       const mmsi = String(vessel.mmsi_number);
       const latLng = [tel.latitude, tel.longitude];
@@ -959,10 +1025,12 @@
         let badgeStyle = isLive ? 'bg-purple-950 text-purple-300 border border-purple-800/50' : 'bg-slate-800 text-slate-400';
         let badgeText = isLive ? 'LIVE' : 'AIS';
 
+        const speedNum = tel.speed_knots || 0;
+
         card.innerHTML = `
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-1.5 truncate pr-2">
-              <span class="w-2 h-2 rounded-full ${tel.speed_knots > 0.5 ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
+              <span class="w-2 h-2 rounded-full ${speedNum > 0.5 ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
               <span class="font-bold text-xs text-slate-100 truncate">${vessel.vessel_name}</span>
             </div>
             <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${badgeStyle}">${badgeText}</span>
@@ -970,11 +1038,11 @@
           
           <div class="text-[11px] text-slate-400 flex justify-between mt-1 font-mono">
             <span>MMSI: ${vessel.mmsi_number}</span>
-            <span>HDG: ${tel.course_heading ? Math.round(tel.course_heading) + '°' : '-'}</span>
+            <span>HDG: ${tel.course_heading !== undefined ? Math.round(tel.course_heading) + '°' : '-'}</span>
           </div>
 
           <div class="flex items-center justify-between text-xs mt-1.5 pt-1.5 border-t border-slate-800/60">
-            <span class="text-emerald-400 font-mono font-semibold">${tel.speed_knots ? tel.speed_knots.toFixed(1) : 0} Kts</span>
+            <span class="text-emerald-400 font-mono font-semibold">${speedNum.toFixed(1)} Kts</span>
             <span class="text-slate-400 text-[10px] truncate max-w-[140px] text-right">${tel.geofence_status || '-'}</span>
           </div>
         `;
@@ -983,8 +1051,13 @@
     }
 
     function focusOnVessel(mmsi) {
+      const prevMmsi = selectedMmsi;
       selectedMmsi = String(mmsi);
-      
+
+      if (prevMmsi && vesselsStore[prevMmsi]) {
+        upsertVesselMarker(vesselsStore[prevMmsi]);
+      }
+
       const vessel = vesselsStore[selectedMmsi];
       if (vessel) {
         upsertVesselMarker(vessel);
@@ -1013,15 +1086,15 @@
       const speedKts = tel.speed_knots || 0;
       const speedKmh = (speedKts * 1.852).toFixed(1);
 
-      document.getElementById('hudVesselName').innerText = vessel.vessel_name;
+      document.getElementById('hudVesselName').innerText = vessel.vessel_name || '-';
       document.getElementById('hudVesselType').innerText = vessel.vessel_type || 'Ship';
       document.getElementById('hudSpeed').innerText = speedKts.toFixed(1);
       document.getElementById('hudSpeedKmh').innerText = `${speedKmh} km/h`;
       document.getElementById('hudHeading').innerText = `${Math.round(tel.course_heading || 0)}°`;
       document.getElementById('hudNavStatus').innerText = tel.geofence_status || 'Underway';
-      document.getElementById('hudMmsi').innerText = vessel.mmsi_number;
+      document.getElementById('hudMmsi').innerText = vessel.mmsi_number || '-';
       document.getElementById('hudImo').innerText = `IMO: ${vessel.imo_number || '-'}`;
-      document.getElementById('hudCoords').innerHTML = `Lat: ${tel.latitude ? tel.latitude.toFixed(4) : '-'}<br>Lon: ${tel.longitude ? tel.longitude.toFixed(4) : '-'}`;
+      document.getElementById('hudCoords').innerHTML = `Lat: ${tel.latitude !== undefined ? tel.latitude.toFixed(4) : '-'}<br>Lon: ${tel.longitude !== undefined ? tel.longitude.toFixed(4) : '-'}`;
       document.getElementById('hudCallsign').innerText = vessel.callsign || '-';
       document.getElementById('hudLastUpdate').innerText = vessel.last_updated || 'Live';
 
@@ -1038,7 +1111,12 @@
 
     function closeVesselDetailPanel() {
       document.getElementById('vesselDetailPanel').classList.add('hidden');
+      const prevMmsi = selectedMmsi;
       selectedMmsi = null;
+
+      if (prevMmsi && vesselsStore[prevMmsi]) {
+        upsertVesselMarker(vesselsStore[prevMmsi]);
+      }
       renderVesselList();
     }
 
@@ -1049,6 +1127,8 @@
           markerClusterGroup.zoomToShowLayer(marker, () => {
             map.setView(marker.getLatLng(), 13, { animate: true });
           });
+        } else {
+          map.setView(marker.getLatLng(), 13, { animate: true });
         }
       }
     }
@@ -1061,78 +1141,22 @@
       map.fitBounds(group.getBounds().pad(0.15));
     }
 
-    let isSidebarOpen = true;
-
-    function initSidebarState() {
-      // Automatic initial state: Open on desktop (>=1024px), closed on mobile
-      isSidebarOpen = window.innerWidth >= 1024;
-      applySidebarState();
-    }
-
-    function toggleSidebar(forceState) {
-      if (typeof forceState === 'boolean') {
-        isSidebarOpen = forceState;
-      } else {
-        isSidebarOpen = !isSidebarOpen;
-      }
-      applySidebarState();
-    }
-
-    function applySidebarState() {
+    function toggleMobileSidebar(show) {
       const sidebar = document.getElementById('sidebar');
       const backdrop = document.getElementById('sidebarBackdrop');
-      const toggleBtn = document.getElementById('sidebarToggleBtn');
-      const floatingBtn = document.getElementById('floatingExpandSidebarBtn');
-      const tickerContainer = document.getElementById('tickerContainer');
 
-      if (isSidebarOpen) {
-        sidebar.classList.remove('-translate-x-full', 'lg:-ml-80', 'sm:-ml-88');
-        sidebar.classList.add('translate-x-0', 'lg:ml-0');
-        
-        if (window.innerWidth < 1024) {
-          backdrop.classList.remove('hidden');
-        } else {
-          backdrop.classList.add('hidden');
-        }
+      const isHidden = sidebar.classList.contains('-translate-x-full');
+      const shouldShow = show !== undefined ? show : isHidden;
 
-        if (toggleBtn) {
-          toggleBtn.innerHTML = `<i data-lucide="panel-left-close" class="w-5 h-5 text-blue-400"></i>`;
-          toggleBtn.title = "Sembunyikan Sidebar Armada";
-        }
-        if (floatingBtn) {
-          floatingBtn.classList.add('hidden');
-        }
-        if (tickerContainer) {
-          tickerContainer.style.left = '0.75rem';
-        }
+      if (shouldShow) {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
       } else {
-        sidebar.classList.add('-translate-x-full', 'lg:-ml-80', 'sm:-ml-88');
-        sidebar.classList.remove('translate-x-0', 'lg:ml-0');
+        sidebar.classList.add('-translate-x-full');
         backdrop.classList.add('hidden');
-
-        if (toggleBtn) {
-          toggleBtn.innerHTML = `<i data-lucide="panel-left" class="w-5 h-5 text-slate-400"></i>`;
-          toggleBtn.title = "Tampilkan Sidebar Armada";
-        }
-        if (floatingBtn) {
-          floatingBtn.classList.remove('hidden');
-        }
-        if (tickerContainer) {
-          tickerContainer.style.left = '3.5rem';
-        }
       }
 
-      if (window.lucide) lucide.createIcons();
-
-      // Trigger Leaflet map container recalculation seamlessly
-      setTimeout(() => { 
-        if (map) map.invalidateSize(); 
-      }, 310);
-    }
-
-    // Backward compatibility alias
-    function toggleMobileSidebar(show) {
-      toggleSidebar(show);
+      setTimeout(() => { if (map) map.invalidateSize(); }, 300);
     }
 
     function filterVessels() {
@@ -1154,7 +1178,6 @@
 
     window.onload = () => {
       initMap();
-      initSidebarState();
       if (window.lucide) lucide.createIcons();
     };
   </script>
